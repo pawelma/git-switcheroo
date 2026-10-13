@@ -243,3 +243,11 @@ cd_file() {
   [ "$status" -eq 0 ]
   [ "$(cat "$CD_FILE")" = "$WT" ]
 }
+
+@test "a cd file that cannot be written is a loud failure, not a hop" {
+  add_worktree feature
+  run env SWITCHEROO_CD_FILE="$TEST_ROOT/missing-dir/cd-target" git-switcheroo co feature
+  [ "$status" -eq 1 ]
+  assert_output_contains "✗ could not hand the worktree path to your shell"
+  refute_output_contains "hopping"
+}

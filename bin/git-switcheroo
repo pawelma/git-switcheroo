@@ -87,9 +87,12 @@ if [ -n "$holder" ]; then
     if [ -n "$prefix" ] && [ -d "$wt_path/$prefix" ]; then
       destination=$wt_path/${prefix%/}
     fi
+    if ! printf '%s\n' "$destination" 2>/dev/null >"$SWITCHEROO_CD_FILE"; then
+      fail "could not hand the worktree path to your shell — cd $wt_path"
+      exit 1
+    fi
     hop "$branch lives in $wt_path — hopping"
     say "  $(git -C "$wt_path" log -1 --format='%h %s')"
-    printf '%s\n' "$destination" >"$SWITCHEROO_CD_FILE"
     exit 0
   fi
 
