@@ -35,3 +35,17 @@ add_worktree() {
     git -C "$REPO" worktree add -q -b "$branch" "$WT"
   fi
 }
+
+assert_output_contains() {
+  [[ "$output" == *"$1"* ]] || {
+    printf 'expected output to contain: %s\n--- output:\n%s\n' "$1" "$output"
+    return 1
+  }
+}
+
+refute_output_contains() {
+  [[ "$output" != *"$1"* ]] || {
+    printf 'expected output not to contain: %s\n--- output:\n%s\n' "$1" "$output"
+    return 1
+  }
+}
