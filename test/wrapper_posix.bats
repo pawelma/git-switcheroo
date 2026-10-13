@@ -64,3 +64,18 @@ in_zsh() {
   assert_output_contains "already used by worktree"
   refute_output_contains "command not found"
 }
+
+@test "bash: an existing git alias disables the wrapper with a clear warning" {
+  run bash --norc -ic "alias git='command git'; source '$SWITCHEROO_ROOT/shell/git-switcheroo.sh'; echo LOADED"
+  assert_output_contains "LOADED"
+  assert_output_contains "git-switcheroo: 'git' is an alias"
+  refute_output_contains "syntax error"
+}
+
+@test "zsh: an existing git alias disables the wrapper with a clear warning" {
+  command -v zsh >/dev/null || skip "zsh not installed"
+  run zsh -fic "alias git='command git'; source '$SWITCHEROO_ROOT/shell/git-switcheroo.sh'; echo LOADED"
+  assert_output_contains "LOADED"
+  assert_output_contains "git-switcheroo: 'git' is an alias"
+  refute_output_contains "parse error"
+}

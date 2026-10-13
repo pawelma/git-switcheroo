@@ -3,6 +3,11 @@ case $- in
   *) return 0 ;;
 esac
 
+if alias git >/dev/null 2>&1; then
+  printf '%s\n' "git-switcheroo: 'git' is an alias in this shell, so git co won't hop — remove the alias to enable it" >&2
+  return 0
+fi
+
 _switcheroo_commands="sr $(sed -n 's/^commands=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/git-switcheroo/config" 2>/dev/null | tr -d '"')"
 
 _switcheroo_handles() {
