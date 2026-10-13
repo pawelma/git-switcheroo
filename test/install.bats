@@ -139,3 +139,23 @@ FAKE
   [ "$status" -eq 0 ]
   cmp "$BIN/git-switcheroo" "$SWITCHEROO_ROOT/bin/git-switcheroo"
 }
+
+@test "warns when no shell will load the wrapper" {
+  rm "$HOME/.zshrc"
+  mkdir -p "$TEST_ROOT/tools"
+  for tool in git sh sed grep tr mkdir cp chmod mv dirname cat rm rmdir; do
+    ln -s "$(command -v "$tool")" "$TEST_ROOT/tools/$tool"
+  done
+  run env PATH="$TEST_ROOT/tools" SWITCHEROO_COMMANDS=co "$TEST_ROOT/tools/sh" "$SWITCHEROO_ROOT/install.sh"
+  [ "$status" -eq 0 ]
+  assert_output_contains "⚠ no shell config found to load git-switcheroo"
+  assert_output_contains ". \"$CONFIG/git-switcheroo.sh\""
+}
+
+@test "keeps an existing sr alias that is not ours" {
+  git config --global alias.sr "status -sb"
+  install_with "co"
+  [ "$status" -eq 0 ]
+  [ "$(git config --global alias.sr)" = "status -sb" ]
+  assert_output_contains "⚠ alias.sr is already set"
+}

@@ -105,9 +105,18 @@ choose_commands() {
 
 add_source_line() {
   [ -f "$1" ] || return 0
+  shell_integrations=$((shell_integrations + 1))
   grep -qF "$source_line" "$1" && return 0
   printf '\n%s\n' "$source_line" >>"$1"
   say "  added source line to $1"
+}
+
+install_sr_alias() {
+  existing=$(git config --global --get alias.sr 2>/dev/null || true)
+  case "$existing" in
+    "" | "!git-switcheroo sr") git config --global alias.sr '!git-switcheroo sr' ;;
+    *) say "⚠ alias.sr is already set to '$existing' — left as is (git sr still works in interactive shells)" ;;
+  esac
 }
 
 remove_source_line() {
@@ -132,20 +141,26 @@ uninstall() {
 
 install() {
   commands=$(choose_commands)
+  shell_integrations=0
 
   install_file bin/git-switcheroo "$bin_dir/git-switcheroo" 755
   install_file shell/git-switcheroo.sh "$posix_wrapper" 644
   if command -v fish >/dev/null 2>&1 || [ -d "$config_home/fish" ]; then
     install_file shell/git-switcheroo.fish "$fish_file" 644
+    shell_integrations=$((shell_integrations + 1))
   fi
   printf 'commands="%s"\n' "$commands" >"$config_file"
-  git config --global alias.sr '!git-switcheroo sr'
+  install_sr_alias
   add_source_line "$bashrc"
   add_source_line "$zshrc"
 
   say ""
   say "✓ git-switcheroo installed"
   say "  commands: sr${commands:+ $commands}"
+  if [ "$shell_integrations" -eq 0 ]; then
+    say "⚠ no shell config found to load git-switcheroo — add this line to your shell's rc file:"
+    say "    $source_line"
+  fi
   case ":$PATH:" in
     *":$bin_dir:"*) ;;
     *) say "⚠ $bin_dir is not on your PATH — add it (fish: fish_add_path $bin_dir)" ;;
