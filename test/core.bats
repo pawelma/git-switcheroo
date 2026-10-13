@@ -212,3 +212,34 @@ cd_file() {
   [ "$status" -eq 0 ]
   [ "$(cat "$CD_FILE")" = "$REPO" ]
 }
+
+@test "removes a stale worktree entry and checks out in place" {
+  add_worktree feature
+  add_worktree other
+  rm -rf "$TEST_ROOT/wt-feature" "$TEST_ROOT/wt-other"
+  run git-switcheroo co feature
+  [ "$status" -eq 0 ]
+  assert_output_contains "⚠ worktree $TEST_ROOT/wt-feature for feature is gone — removing stale entry"
+  assert_output_contains "✓ on feature"
+  [ "$(git symbolic-ref --short HEAD)" = "feature" ]
+  git worktree list --porcelain | grep -q "wt-other"
+}
+
+@test "refuses to touch a locked worktree whose directory is gone" {
+  add_worktree feature
+  git worktree lock --reason "agent busy" "$WT"
+  rm -rf "$WT"
+  run git-switcheroo co feature
+  [ "$status" -eq 1 ]
+  assert_output_contains "✗ feature held by locked worktree $WT (agent busy) — git worktree unlock $WT first"
+  [ "$(git symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "a locked worktree that still exists is hopped into" {
+  add_worktree feature
+  git worktree lock "$WT"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co feature
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$WT" ]
+}

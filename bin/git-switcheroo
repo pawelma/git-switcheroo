@@ -92,6 +92,13 @@ if [ -n "$holder" ]; then
     printf '%s\n' "$destination" >"$SWITCHEROO_CD_FILE"
     exit 0
   fi
+
+  if [ "$wt_lock" = locked ]; then
+    fail "$branch held by locked worktree $wt_path${wt_reason:+ ($wt_reason)} — git worktree unlock $wt_path first"
+    exit 1
+  fi
+  warn "worktree $wt_path for $branch is gone — removing stale entry"
+  git worktree remove "$wt_path" || { fail "could not remove stale worktree $wt_path"; exit 1; }
 fi
 
 before=$(current_ref)
