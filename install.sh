@@ -17,7 +17,7 @@ say() { printf '%s\n' "$*" >&2; }
 
 local_root=""
 case "$0" in
-  */install.sh) local_root=$(cd "$(dirname "$0")" && pwd) ;;
+  install.sh | */install.sh) local_root=$(cd "$(dirname "$0")" && pwd) ;;
 esac
 [ -n "$local_root" ] && [ -f "$local_root/bin/git-switcheroo" ] || local_root=""
 

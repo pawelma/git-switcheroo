@@ -129,3 +129,13 @@ FAKE
   run sh "$SWITCHEROO_ROOT/install.sh" --bogus
   [ "$status" -eq 64 ]
 }
+
+@test "running from inside a clone uses local files, not the network" {
+  mkdir -p "$TEST_ROOT/fakebin"
+  printf '#!/bin/sh\nexit 56\n' >"$TEST_ROOT/fakebin/curl"
+  chmod +x "$TEST_ROOT/fakebin/curl"
+  cd "$SWITCHEROO_ROOT"
+  run env PATH="$TEST_ROOT/fakebin:$PATH" SWITCHEROO_COMMANDS=co sh install.sh
+  [ "$status" -eq 0 ]
+  cmp "$BIN/git-switcheroo" "$SWITCHEROO_ROOT/bin/git-switcheroo"
+}
