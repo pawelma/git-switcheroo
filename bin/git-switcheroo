@@ -31,6 +31,10 @@ branch_exists() {
   [ "$(git for-each-ref --format='%(refname:strip=3)' refs/remotes | grep -cFx -- "$1")" -eq 1 ]
 }
 
+current_ref() {
+  git symbolic-ref --short -q HEAD || git rev-parse --short HEAD 2>/dev/null
+}
+
 [ $# -ge 1 ] || { say "usage: git-switcheroo <command> [args...]"; exit 64; }
 cmd=$1
 shift
@@ -45,4 +49,22 @@ branch=$1
 case "$branch" in -*) exec git "$underlying" "$branch" ;; esac
 branch_exists "$branch" || exec git "$underlying" "$branch"
 
-exec git "$underlying" "$branch"
+if [ "$(git symbolic-ref --short -q HEAD)" = "$branch" ]; then
+  ok "already on $branch"
+  exit 0
+fi
+
+before=$(current_ref)
+git "$underlying" "$branch"
+rc=$?
+if [ "$rc" -ne 0 ]; then
+  fail "checkout failed — still on $before"
+  exit "$rc"
+fi
+
+after=$(git symbolic-ref --short -q HEAD)
+if [ "$after" != "$branch" ]; then
+  fail "expected $branch, HEAD is ${after:-detached at $(git rev-parse --short HEAD)}"
+  exit 1
+fi
+ok "on $branch ($(git log -1 --format='%h %s'))"
