@@ -116,3 +116,99 @@ STUB
   [ "$status" -ne 0 ]
   refute_output_contains "✓"
 }
+
+cd_file() {
+  CD_FILE="$TEST_ROOT/cd-target"
+  : >"$CD_FILE"
+}
+
+@test "hops to the worktree that has the branch" {
+  add_worktree feature
+  git -C "$WT" commit -q --allow-empty -m "Agent work"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co feature
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$WT" ]
+  assert_output_contains "↪ feature lives in $WT — hopping"
+  assert_output_contains "Agent work"
+  [ "$(git symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "lands in the same subdirectory when it exists there" {
+  add_worktree feature
+  cd app/models
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co feature
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$WT/app/models" ]
+}
+
+@test "lands at the worktree root when the subdirectory is missing there" {
+  add_worktree feature
+  mkdir -p only-here
+  cd only-here
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co feature
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$WT" ]
+}
+
+@test "without a cd file it refuses loudly and says where to go" {
+  add_worktree feature
+  run git-switcheroo co feature
+  [ "$status" -eq 2 ]
+  assert_output_contains "✗ feature is checked out at $WT — cd there"
+}
+
+@test "the git sr alias keeps the subdirectory via GIT_PREFIX" {
+  git config --global alias.sr '!git-switcheroo sr'
+  add_worktree feature
+  cd app/models
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git sr feature
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$WT/app/models" ]
+}
+
+@test "dash resolves to the previous branch and hops if another worktree took it" {
+  git checkout -q -b feature
+  git checkout -q main
+  add_worktree feature
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co -
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$WT" ]
+}
+
+@test "dash after a detached HEAD is left to git" {
+  git checkout -q --detach
+  git checkout -q main
+  run git-switcheroo co -
+  refute_output_contains "✓"
+  refute_output_contains "↪"
+}
+
+@test "hops into a worktree whose path contains spaces" {
+  add_worktree feature "$TEST_ROOT/agent worktrees/feature one"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co feature
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$TEST_ROOT/agent worktrees/feature one" ]
+}
+
+@test "hops for branch names with slashes" {
+  add_worktree feature/login
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co feature/login
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$WT" ]
+}
+
+@test "from inside an agent worktree it hops back to the main checkout" {
+  add_worktree feature
+  cd "$WT"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co main
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$REPO" ]
+}

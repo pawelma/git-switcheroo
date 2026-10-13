@@ -35,6 +35,16 @@ current_ref() {
   git symbolic-ref --short -q HEAD || git rev-parse --short HEAD 2>/dev/null
 }
 
+worktree_holding() {
+  git worktree list --porcelain | awk -v ref="refs/heads/$1" '
+    /^worktree / { path = substr($0, 10); found = 0; locked = "unlocked"; reason = "" }
+    $0 == "branch " ref { found = 1 }
+    /^locked/ { locked = "locked"; reason = substr($0, 8) }
+    /^$/ && found && !done { print path; print locked; print reason; done = 1 }
+    END { if (found && !done) { print path; print locked; print reason } }
+  '
+}
+
 [ $# -ge 1 ] || { say "usage: git-switcheroo <command> [args...]"; exit 64; }
 cmd=$1
 shift
@@ -46,12 +56,42 @@ if [ $# -ne 1 ] || ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 branch=$1
+if [ "$branch" = "-" ]; then
+  previous=$(git rev-parse --symbolic-full-name '@{-1}' 2>/dev/null)
+  case "$previous" in
+    refs/heads/*) branch=${previous#refs/heads/} ;;
+    *) exec git "$underlying" - ;;
+  esac
+fi
 case "$branch" in -*) exec git "$underlying" "$branch" ;; esac
 branch_exists "$branch" || exec git "$underlying" "$branch"
 
 if [ "$(git symbolic-ref --short -q HEAD)" = "$branch" ]; then
   ok "already on $branch"
   exit 0
+fi
+
+holder=$(worktree_holding "$branch")
+if [ -n "$holder" ]; then
+  wt_path=$(printf '%s\n' "$holder" | sed -n 1p)
+  wt_lock=$(printf '%s\n' "$holder" | sed -n 2p)
+  wt_reason=$(printf '%s\n' "$holder" | sed -n 3p)
+
+  if [ -d "$wt_path" ]; then
+    if [ -z "${SWITCHEROO_CD_FILE:-}" ]; then
+      fail "$branch is checked out at $wt_path — cd there"
+      exit 2
+    fi
+    prefix=${GIT_PREFIX:-$(git rev-parse --show-prefix)}
+    destination=$wt_path
+    if [ -n "$prefix" ] && [ -d "$wt_path/$prefix" ]; then
+      destination=$wt_path/${prefix%/}
+    fi
+    hop "$branch lives in $wt_path — hopping"
+    say "  $(git -C "$wt_path" log -1 --format='%h %s')"
+    printf '%s\n' "$destination" >"$SWITCHEROO_CD_FILE"
+    exit 0
+  fi
 fi
 
 before=$(current_ref)
