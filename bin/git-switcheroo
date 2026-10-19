@@ -84,6 +84,15 @@ hand_to_shell() {
   fi
 }
 
+restore_detached() {
+  [ -n "$detached_from" ] || return 0
+  if git -C "$detached_from" checkout -q "$branch"; then
+    say "  $branch put back in $detached_from"
+  else
+    fail "could not put $branch back in $detached_from — it is still detached; git -C $detached_from checkout $branch"
+  fi
+}
+
 [ $# -ge 1 ] || { say "usage: git-switcheroo <command> [args...]"; exit 64; }
 cmd=$1
 shift
@@ -154,15 +163,14 @@ before=$(cd "$target_dir" && current_ref)
 git -C "$target_dir" "$underlying" "$branch"
 rc=$?
 if [ "$rc" -ne 0 ]; then
-  if [ -n "$detached_from" ] && git -C "$detached_from" checkout -q "$branch"; then
-    say "  $branch put back in $detached_from"
-  fi
+  restore_detached
   fail "checkout failed$where — still on $before"
   exit "$rc"
 fi
 
 after=$(git -C "$target_dir" symbolic-ref --short -q HEAD)
 if [ "$after" != "$branch" ]; then
+  restore_detached
   fail "expected $branch$where, HEAD is ${after:-detached at $(git -C "$target_dir" rev-parse --short HEAD)}"
   exit 1
 fi

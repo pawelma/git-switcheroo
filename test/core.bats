@@ -298,6 +298,7 @@ cd_file() {
   cd_file
   run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co main
   [ "$status" -eq 1 ]
+  assert_output_contains "main put back in $TEST_ROOT/wt-main"
   assert_output_contains "✗ checkout failed in $REPO — still on feature"
   [ ! -s "$CD_FILE" ]
   [ "$(git -C "$TEST_ROOT/wt-main" symbolic-ref --short HEAD)" = "main" ]
@@ -386,4 +387,38 @@ cd_file() {
   [ "$status" -eq 0 ]
   assert_output_contains "✓ already on main"
   [ ! -s "$CD_FILE" ]
+}
+
+@test "a rollback that fails says the other worktree is still detached" {
+  git checkout -q -b feature
+  echo "feature version" >app/models/user.rb
+  git commit -qam "Change user"
+  echo "local edit" >app/models/user.rb
+  add_worktree main
+  mkdir -p "$TEST_ROOT/stub"
+  cat >"$TEST_ROOT/stub/git" <<STUB
+#!/bin/sh
+[ "\$2" = "$WT" ] && [ "\$3" = checkout ] && [ "\$5" = main ] && exit 1
+exec "$(command -v git)" "\$@"
+STUB
+  chmod +x "$TEST_ROOT/stub/git"
+  PATH="$TEST_ROOT/stub:$PATH" run git-switcheroo co main
+  [ "$status" -eq 1 ]
+  assert_output_contains "✗ could not put main back in $WT — it is still detached"
+}
+
+@test "a checkout that exits 0 but leaves HEAD elsewhere puts main back" {
+  git checkout -q -b feature
+  add_worktree main
+  mkdir -p "$TEST_ROOT/stub"
+  cat >"$TEST_ROOT/stub/git" <<STUB
+#!/bin/sh
+[ "\$2" = . ] && [ "\$3" = checkout ] && exit 0
+exec "$(command -v git)" "\$@"
+STUB
+  chmod +x "$TEST_ROOT/stub/git"
+  PATH="$TEST_ROOT/stub:$PATH" run git-switcheroo co main
+  [ "$status" -eq 1 ]
+  assert_output_contains "✗ expected main, HEAD is feature"
+  [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "main" ]
 }
