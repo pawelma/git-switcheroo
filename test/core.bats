@@ -87,7 +87,7 @@ setup() {
   mkdir -p "$TEST_ROOT/stub"
   cat >"$TEST_ROOT/stub/git" <<STUB
 #!/bin/sh
-[ "\$1" = checkout ] && exit 0
+[ "\$3" = checkout ] && exit 0
 exec "$(command -v git)" "\$@"
 STUB
   chmod +x "$TEST_ROOT/stub/git"
@@ -250,4 +250,118 @@ cd_file() {
   [ "$status" -eq 1 ]
   assert_output_contains "✗ could not hand the worktree path to your shell"
   refute_output_contains "hopping"
+}
+
+@test "takes main back from a linked worktree into the main checkout" {
+  git checkout -q -b feature
+  add_worktree main
+  run git-switcheroo co main
+  [ "$status" -eq 0 ]
+  assert_output_contains "⚠ detached main in $WT — it belongs in $REPO"
+  assert_output_contains "✓ on main"
+  [ "$(git symbolic-ref --short HEAD)" = "main" ]
+  ! git -C "$WT" symbolic-ref -q HEAD
+}
+
+@test "from a linked worktree main is checked out in the main checkout and hopped to" {
+  git checkout -q -b feature
+  add_worktree other
+  cd "$WT"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co main
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$REPO" ]
+  assert_output_contains "✓ on main in $REPO"
+  [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
+  [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "other" ]
+}
+
+@test "takes main back from the linked worktree you are standing in" {
+  git checkout -q -b feature
+  add_worktree main
+  cd "$WT/app/models"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co main
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$REPO/app/models" ]
+  [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "a failed checkout in the main checkout puts main back and does not hop" {
+  git checkout -q -b feature
+  echo "feature version" >app/models/user.rb
+  git commit -qam "Change user"
+  echo "local edit" >app/models/user.rb
+  add_worktree main
+  add_worktree other
+  cd "$WT"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co main
+  [ "$status" -eq 1 ]
+  assert_output_contains "✗ checkout failed in $REPO — still on feature"
+  [ ! -s "$CD_FILE" ]
+  [ "$(git -C "$TEST_ROOT/wt-main" symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "without a cd file main is still checked out in the main checkout" {
+  git checkout -q -b feature
+  add_worktree other
+  cd "$WT"
+  run git-switcheroo co main
+  [ "$status" -eq 2 ]
+  assert_output_contains "✗ main is checked out at $REPO — cd there"
+  [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "pinDefaultBranch false hops into the linked worktree holding main" {
+  git config switcheroo.pinDefaultBranch false
+  git checkout -q -b feature
+  add_worktree main
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co main
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$WT" ]
+  [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "other branches are not pinned" {
+  add_worktree other
+  cd "$WT"
+  git branch feature
+  run git-switcheroo co feature
+  [ "$status" -eq 0 ]
+  [ "$(git symbolic-ref --short HEAD)" = "feature" ]
+}
+
+@test "falls back to master as the default branch" {
+  git branch -m main master
+  git checkout -q -b feature
+  add_worktree master
+  run git-switcheroo co master
+  [ "$status" -eq 0 ]
+  [ "$(git symbolic-ref --short HEAD)" = "master" ]
+}
+
+@test "the default branch comes from origin/HEAD" {
+  git branch develop
+  git clone -q "$REPO" "$TEST_ROOT/clone"
+  cd "$TEST_ROOT/clone"
+  git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/develop
+  git branch -q develop origin/develop
+  git worktree add -q "$TEST_ROOT/wt-develop" develop
+  run git-switcheroo co develop
+  [ "$status" -eq 0 ]
+  [ "$(git symbolic-ref --short HEAD)" = "develop" ]
+  ! git -C "$TEST_ROOT/wt-develop" symbolic-ref -q HEAD
+}
+
+@test "a bare repository has no main checkout to pin to" {
+  git clone -q --bare "$REPO" "$TEST_ROOT/bare.git"
+  git -C "$TEST_ROOT/bare.git" worktree add -q "$TEST_ROOT/bare-main" main
+  git -C "$TEST_ROOT/bare.git" worktree add -q -b feature "$TEST_ROOT/bare-feature"
+  cd "$TEST_ROOT/bare-feature"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co main
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$TEST_ROOT/bare-main" ]
 }
