@@ -49,7 +49,8 @@ worktree_holding() {
 }
 
 default_branch() {
-  origin_head=$(git symbolic-ref --short -q refs/remotes/origin/HEAD) && { echo "${origin_head#origin/}"; return; }
+  origin_head=$(git symbolic-ref --short -q refs/remotes/origin/HEAD) &&
+    git show-ref --verify --quiet "refs/remotes/$origin_head" && { echo "${origin_head#origin/}"; return; }
   for candidate in main master; do
     git show-ref --verify --quiet "refs/heads/$candidate" && { echo "$candidate"; return; }
   done

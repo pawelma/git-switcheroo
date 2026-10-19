@@ -447,3 +447,14 @@ STUB
   assert_output_contains "git worktree unlock $WT first"
   [ "$(git symbolic-ref --short HEAD)" = "feature" ]
 }
+
+@test "a dangling origin/HEAD falls back to main" {
+  git clone -q "$REPO" "$TEST_ROOT/clone"
+  cd "$TEST_ROOT/clone"
+  git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/gone
+  git checkout -q -b feature
+  git worktree add -q "$TEST_ROOT/clone-main" main
+  run git-switcheroo co main
+  [ "$status" -eq 0 ]
+  [ "$(git symbolic-ref --short HEAD)" = "main" ]
+}
