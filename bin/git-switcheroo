@@ -111,7 +111,7 @@ if [ "$(git config --type=bool --get switcheroo.pinDefaultBranch 2>/dev/null || 
   pin_dir=$(main_worktree)
 fi
 target_dir=.
-if [ -n "$pin_dir" ] && ! same_dir . "$pin_dir"; then
+if [ -n "$pin_dir" ] && ! same_dir "$(git rev-parse --show-toplevel)" "$pin_dir"; then
   target_dir=$pin_dir
 fi
 

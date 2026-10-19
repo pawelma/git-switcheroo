@@ -378,3 +378,12 @@ cd_file() {
   [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
   [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "other" ]
 }
+
+@test "says already on main from a subdirectory of the main checkout" {
+  cd app/models
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co main
+  [ "$status" -eq 0 ]
+  assert_output_contains "✓ already on main"
+  [ ! -s "$CD_FILE" ]
+}
