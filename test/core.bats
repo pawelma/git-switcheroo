@@ -326,12 +326,12 @@ cd_file() {
 }
 
 @test "other branches are not pinned" {
-  add_worktree other
-  cd "$WT"
-  git branch feature
-  run git-switcheroo co feature
+  add_worktree feature
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co feature
   [ "$status" -eq 0 ]
-  [ "$(git symbolic-ref --short HEAD)" = "feature" ]
+  [ "$(cat "$CD_FILE")" = "$WT" ]
+  [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "feature" ]
 }
 
 @test "falls back to master as the default branch" {
@@ -421,4 +421,29 @@ STUB
   [ "$status" -eq 1 ]
   assert_output_contains "✗ expected main, HEAD is feature"
   [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "a stale linked worktree holding main is removed and main lands in the main checkout" {
+  git checkout -q -b feature
+  add_worktree main
+  rm -rf "$WT"
+  add_worktree other
+  cd "$WT"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co main
+  [ "$status" -eq 0 ]
+  assert_output_contains "⚠ worktree $TEST_ROOT/wt-main for main is gone — removing stale entry"
+  [ "$(cat "$CD_FILE")" = "$REPO" ]
+  [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "a locked stale linked worktree holding main is left alone" {
+  git checkout -q -b feature
+  add_worktree main
+  git worktree lock "$WT"
+  rm -rf "$WT"
+  run git-switcheroo co main
+  [ "$status" -eq 1 ]
+  assert_output_contains "git worktree unlock $WT first"
+  [ "$(git symbolic-ref --short HEAD)" = "feature" ]
 }
