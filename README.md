@@ -40,7 +40,7 @@ curl -fsSL https://raw.githubusercontent.com/pawelma/git-switcheroo/main/install
 | Checkout fails (dirty tree, conflicts…) | git's error, then ✗ checkout failed — still on main |
 | Its worktree folder was deleted | ⚠ stale entry removed, then normal checkout |
 | Its worktree folder was deleted but the worktree is locked | ✗ … git worktree unlock … first — nothing touched |
-| `feature-x` is your default branch (`main`/`master`) | always checked out in the **main checkout**, and you hop there — see below |
+| The branch is your default branch (`main`/`master`) | pinned to the **main checkout**: checked out there, and you hop there — see below |
 | `git co -` | resolves your previous branch, then all of the above |
 | `git co -b new`, `git co -- file`, `git co v1.2.0` … | plain git, untouched |
 
@@ -50,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/pawelma/git-switcheroo/main/install
 
 **Going back.** From inside an agent worktree, `git co main` hops you back to the main checkout.
 
-**Main stays home.** An agent checked out `main` in its worktree? `git co main` detaches it there (its files and uncommitted changes stay put), checks out `main` in your main checkout and hops you there. From any linked worktree, `git co main` lands in the main checkout too. If that checkout fails (e.g. local changes in the way), the agent's worktree gets `main` back and you stay where you are. The default branch is `origin/HEAD`, falling back to `main`, then `master`; bare-repo setups have no main checkout and are left alone.
+**Main stays home (pinning).** An agent checked out `main` in its worktree? `git co main` detaches it there (its files and uncommitted changes stay put; commits it makes afterwards land on a detached HEAD, not on `main`), checks out `main` in your main checkout and hops you there. From any linked worktree, `git co main` lands in the main checkout too. If that checkout fails (e.g. local changes in the way), the agent's worktree gets `main` back and you stay where you are. The default branch is `origin/HEAD`, falling back to `main`, then `master`; bare-repo setups have no main checkout and are left alone.
 
 **Deep in a subdirectory.** In `app/models`? You land in `app/models` of the other worktree.
 
@@ -85,7 +85,7 @@ git config --global alias.sr '!git-switcheroo sr'
 
 **Non-interactive install?** `SWITCHEROO_COMMANDS="co sw" sh install.sh` skips the prompt. `SWITCHEROO_REF=<tag>` pins a version.
 
-**Can I let other worktrees keep the default branch?** `git config --global switcheroo.pinDefaultBranch false` (or drop `--global` for one repo). `git co main` then hops to whichever worktree has it, like any other branch.
+**Can I turn off default-branch pinning?** `git config --global switcheroo.pinDefaultBranch false` (or drop `--global` for one repo). `git co main` then hops to whichever worktree has it, like any other branch.
 
 **Colors?** Only on a terminal; `NO_COLOR=1` turns them off.
 
