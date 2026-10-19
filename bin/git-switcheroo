@@ -1,6 +1,9 @@
 #!/bin/sh
 set -u
 
+# git exports GIT_DIR to ! aliases run in a linked worktree; it would override every git -C
+[ -n "${GIT_WORK_TREE:-}" ] || unset GIT_DIR
+
 if [ -t 2 ] && [ -z "${NO_COLOR:-}" ]; then
   red=$(printf '\033[1;31m') green=$(printf '\033[32m') yellow=$(printf '\033[33m') cyan=$(printf '\033[36m') reset=$(printf '\033[0m')
 else

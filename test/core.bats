@@ -365,3 +365,16 @@ cd_file() {
   [ "$status" -eq 0 ]
   [ "$(cat "$CD_FILE")" = "$TEST_ROOT/bare-main" ]
 }
+
+@test "the git sr alias from a linked worktree pins main despite the exported GIT_DIR" {
+  git config --global alias.sr '!git-switcheroo sr'
+  git checkout -q -b feature
+  add_worktree other
+  cd "$WT"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git sr main
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CD_FILE")" = "$REPO" ]
+  [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
+  [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "other" ]
+}
