@@ -116,7 +116,7 @@ case "$branch" in -*) exec git "$underlying" "$branch" ;; esac
 branch_exists "$branch" || exec git "$underlying" "$branch"
 
 pin_dir=''
-if [ "$(git config --type=bool --get switcheroo.pinDefaultBranch 2>/dev/null || echo true)" = true ] &&
+if [ "$(git config --type=bool --default true switcheroo.pinDefaultBranch)" = true ] &&
   [ "$branch" = "$(default_branch)" ]; then
   pin_dir=$(main_worktree)
 fi
@@ -155,11 +155,8 @@ if [ -n "$holder" ]; then
   fi
 fi
 
-if [ "$target_dir" = . ]; then
-  where=''
-else
-  where=" in $target_dir"
-fi
+where=''
+[ "$target_dir" = . ] || where=" in $target_dir"
 before=$(cd "$target_dir" && current_ref)
 git -C "$target_dir" "$underlying" "$branch"
 rc=$?
@@ -176,4 +173,7 @@ if [ "$after" != "$branch" ]; then
   exit 1
 fi
 ok "on $branch$where ($(git -C "$target_dir" log -1 --format='%h %s'))"
-[ "$target_dir" = . ] || hand_to_shell "$target_dir"
+if [ "$target_dir" != . ]; then
+  hand_to_shell "$target_dir"
+  hop "hopping to $target_dir"
+fi

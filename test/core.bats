@@ -272,6 +272,7 @@ cd_file() {
   [ "$status" -eq 0 ]
   [ "$(cat "$CD_FILE")" = "$REPO" ]
   assert_output_contains "✓ on main in $REPO"
+  assert_output_contains "↪ hopping to $REPO"
   [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
   [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "other" ]
 }
