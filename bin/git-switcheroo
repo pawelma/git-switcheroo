@@ -116,7 +116,8 @@ case "$branch" in -*) exec git "$underlying" "$branch" ;; esac
 default=$(default_branch)
 case "$branch:$default" in
   main:master | master:main)
-    if ! git show-ref --verify --quiet "refs/heads/$branch"; then
+    if ! git show-ref --verify --quiet "refs/heads/$branch" &&
+      ! git for-each-ref --format='%(refname:strip=3)' refs/remotes | grep -qFx -- "$branch"; then
       warn "no $branch branch here — switching to $default, the default branch"
       branch=$default
     fi

@@ -487,14 +487,25 @@ STUB
   [ "$(git symbolic-ref --short HEAD)" = "master" ]
 }
 
-@test "a remote-only master still falls back to the default main" {
+@test "a remote-only master is checked out instead of the default main" {
   git branch master
   git clone -q "$REPO" "$TEST_ROOT/clone"
   cd "$TEST_ROOT/clone"
   run git-switcheroo co master
   [ "$status" -eq 0 ]
-  assert_output_contains "✓ already on main"
-  ! git show-ref --verify --quiet refs/heads/master
+  refute_output_contains "⚠"
+  [ "$(git symbolic-ref --short HEAD)" = "master" ]
+}
+
+@test "a master on two remotes is left to git instead of falling back" {
+  git branch master
+  git clone -q "$REPO" "$TEST_ROOT/clone"
+  cd "$TEST_ROOT/clone"
+  git remote add upstream "$REPO"
+  git fetch -q upstream
+  run git-switcheroo co master
+  [ "$status" -ne 0 ]
+  refute_output_contains "⚠"
 }
 
 @test "the fallback to main is pinned to the main checkout" {
