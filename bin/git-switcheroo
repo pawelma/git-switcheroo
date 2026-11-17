@@ -113,11 +113,20 @@ if [ "$branch" = "-" ]; then
   esac
 fi
 case "$branch" in -*) exec git "$underlying" "$branch" ;; esac
+default=$(default_branch)
+case "$branch:$default" in
+  main:master | master:main)
+    if ! git show-ref --verify --quiet "refs/heads/$branch"; then
+      warn "no $branch branch here — switching to $default, the default branch"
+      branch=$default
+    fi
+    ;;
+esac
 branch_exists "$branch" || exec git "$underlying" "$branch"
 
 pin_dir=''
 if [ "$(git config --type=bool --default true switcheroo.pinDefaultBranch)" = true ] &&
-  [ "$branch" = "$(default_branch)" ]; then
+  [ "$branch" = "$default" ]; then
   pin_dir=$(main_worktree)
 fi
 target_dir=.
