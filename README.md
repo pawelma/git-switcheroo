@@ -41,6 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/pawelma/git-switcheroo/main/install
 | Its worktree folder was deleted | ⚠ stale entry removed, then normal checkout |
 | Its worktree folder was deleted but the worktree is locked | ✗ … git worktree unlock … first — nothing touched |
 | The branch is your default branch (`main`/`master`) | pinned to the **main checkout**: checked out there, and you hop there — see below |
+| You typed `master` but the default is `main` (or vice versa), and no local or remote branch has that name | ⚠ no master branch here — switching to main, the default branch, then all of the above |
 | `git co -` | resolves your previous branch, then all of the above |
 | `git co -b new`, `git co -- file`, `git co v1.2.0` … | plain git, untouched |
 

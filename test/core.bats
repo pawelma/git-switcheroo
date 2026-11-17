@@ -459,3 +459,63 @@ STUB
   [ "$status" -eq 0 ]
   [ "$(git symbolic-ref --short HEAD)" = "main" ]
 }
+
+@test "master falls back to main when there is no master branch" {
+  git checkout -q -b feature
+  run git-switcheroo co master
+  [ "$status" -eq 0 ]
+  assert_output_contains "⚠ no master branch here — switching to main, the default branch"
+  assert_output_contains "✓ on main"
+  [ "$(git symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "main falls back to master when there is no main branch" {
+  git branch -m main master
+  git checkout -q -b feature
+  run git-switcheroo co main
+  [ "$status" -eq 0 ]
+  assert_output_contains "⚠ no main branch here — switching to master, the default branch"
+  [ "$(git symbolic-ref --short HEAD)" = "master" ]
+}
+
+@test "a local master branch is not replaced by the default branch" {
+  git branch master
+  git checkout -q -b feature
+  run git-switcheroo co master
+  [ "$status" -eq 0 ]
+  refute_output_contains "⚠"
+  [ "$(git symbolic-ref --short HEAD)" = "master" ]
+}
+
+@test "a remote-only master is checked out instead of the default main" {
+  git branch master
+  git clone -q "$REPO" "$TEST_ROOT/clone"
+  cd "$TEST_ROOT/clone"
+  run git-switcheroo co master
+  [ "$status" -eq 0 ]
+  refute_output_contains "⚠"
+  [ "$(git symbolic-ref --short HEAD)" = "master" ]
+}
+
+@test "a master on two remotes is left to git instead of falling back" {
+  git branch master
+  git clone -q "$REPO" "$TEST_ROOT/clone"
+  cd "$TEST_ROOT/clone"
+  git remote add upstream "$REPO"
+  git fetch -q upstream
+  run git-switcheroo co master
+  [ "$status" -ne 0 ]
+  refute_output_contains "⚠"
+}
+
+@test "the fallback to main is pinned to the main checkout" {
+  git checkout -q -b feature
+  add_worktree other
+  cd "$WT"
+  cd_file
+  run env SWITCHEROO_CD_FILE="$CD_FILE" git-switcheroo co master
+  [ "$status" -eq 0 ]
+  assert_output_contains "⚠ no master branch here — switching to main"
+  [ "$(cat "$CD_FILE")" = "$REPO" ]
+  [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
+}
