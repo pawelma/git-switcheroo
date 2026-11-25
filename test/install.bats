@@ -27,8 +27,10 @@ source_line_count() {
   [ -f "$CONFIG/git-switcheroo.sh" ]
   [ "$(cat "$CONFIG/config")" = 'commands="co"' ]
   [ "$(git config --global alias.sr)" = '!git-switcheroo sr' ]
+  [ "$(git config --global alias.land)" = '!git-switcheroo land' ]
   [ "$(git config --global alias.co)" = "checkout" ]
   assert_output_contains "✓ git-switcheroo installed"
+  assert_output_contains "commands: sr land co"
 }
 
 @test "adds the source line only to rc files that exist, once" {
@@ -59,6 +61,8 @@ source_line_count() {
   assert_output_contains "2) [x] sw — alias for switch"
   assert_output_contains "3) [ ] checkout"
   assert_output_contains "4) [ ] switch"
+  assert_output_contains "5) [ ] la — short for git land (opt-in)"
+  assert_output_contains "(git sr and git land are always installed)"
   refute_output_contains "cob"
   [ "$(cat "$CONFIG/config")" = 'commands="co switch"' ]
 }
@@ -122,6 +126,8 @@ FAKE
   [ "$(source_line_count "$HOME/.zshrc")" -eq 0 ]
   run git config --global alias.sr
   [ "$status" -ne 0 ]
+  run git config --global alias.land
+  [ "$status" -ne 0 ]
   [ "$(git config --global alias.co)" = "checkout" ]
 }
 
@@ -158,4 +164,41 @@ FAKE
   [ "$status" -eq 0 ]
   [ "$(git config --global alias.sr)" = "status -sb" ]
   assert_output_contains "⚠ alias.sr is already set"
+}
+
+@test "la is installed when picked" {
+  install_with "co la"
+  [ "$status" -eq 0 ]
+  [ "$(git config --global alias.la)" = '!git-switcheroo land' ]
+  [ "$(cat "$CONFIG/config")" = 'commands="co la"' ]
+}
+
+@test "reinstall pre-selects la when it was picked" {
+  install_with "co la"
+  answer ""
+  assert_output_contains "5) [x] la"
+  [ "$(cat "$CONFIG/config")" = 'commands="co la"' ]
+}
+
+@test "keeps an existing la alias that is not ours" {
+  git config --global alias.la "log --all"
+  install_with "co la"
+  [ "$status" -eq 0 ]
+  [ "$(git config --global alias.la)" = "log --all" ]
+  assert_output_contains "⚠ alias.la is already set to 'log --all' — left as is"
+  [ "$(cat "$CONFIG/config")" = 'commands="co"' ]
+}
+
+@test "dropping la on reinstall removes its alias" {
+  install_with "co la"
+  install_with "co"
+  run git config --global alias.la
+  [ "$status" -ne 0 ]
+}
+
+@test "uninstall removes the la alias" {
+  install_with "co la"
+  run sh "$SWITCHEROO_ROOT/install.sh" --uninstall
+  run git config --global alias.la
+  [ "$status" -ne 0 ]
 }

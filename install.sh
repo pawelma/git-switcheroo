@@ -51,12 +51,13 @@ previous_selection() {
 describe() {
   case "$1" in
     checkout | switch) printf 'every interactive "git %s" (opt-in)' "$1" ;;
+    la) printf 'short for git land (opt-in)' ;;
     *) printf 'alias for %s' "$(git config --global --get "alias.$1")" ;;
   esac
 }
 
 choose_commands() {
-  options="$(checkout_aliases | tr '\n' ' ')checkout switch"
+  options="$(checkout_aliases | tr '\n' ' ')checkout switch la"
   if [ -f "$config_file" ]; then
     defaults=$(previous_selection)
   else
@@ -73,7 +74,7 @@ choose_commands() {
   fi
 
   say ""
-  say "Which commands should git-switcheroo take over? (git sr is always installed)"
+  say "Which commands should git-switcheroo take over? (git sr and git land are always installed)"
   default_numbers=""
   i=0
   for name in $options; do
@@ -111,11 +112,34 @@ add_source_line() {
   say "  added source line to $1"
 }
 
-install_sr_alias() {
-  existing=$(git config --global --get alias.sr 2>/dev/null || true)
+install_alias() {
+  existing=$(git config --global --get "alias.$1" 2>/dev/null || true)
   case "$existing" in
-    "" | "!git-switcheroo sr") git config --global alias.sr '!git-switcheroo sr' ;;
-    *) say "⚠ alias.sr is already set to '$existing' — left as is (git sr still works in interactive shells)" ;;
+    "" | "!git-switcheroo $2") git config --global "alias.$1" "!git-switcheroo $2" ;;
+    *)
+      say "⚠ alias.$1 is already set to '$existing' — left as is${3:+ ($3)}"
+      return 1
+      ;;
+  esac
+}
+
+remove_alias() {
+  if [ "$(git config --global --get "alias.$1" 2>/dev/null)" = "!git-switcheroo $2" ]; then
+    git config --global --unset "alias.$1"
+  fi
+}
+
+install_la_alias() {
+  case " $commands " in
+    *" la "*)
+      install_alias la land && return 0
+      kept=""
+      for name in $commands; do
+        [ "$name" = la ] || kept="$kept $name"
+      done
+      commands=${kept# }
+      ;;
+    *) remove_alias la land ;;
   esac
 }
 
@@ -131,9 +155,9 @@ remove_source_line() {
 uninstall() {
   rm -f "$bin_dir/git-switcheroo" "$fish_file" "$posix_wrapper" "$config_file"
   rmdir "$config_dir" 2>/dev/null || true
-  if [ "$(git config --global --get alias.sr 2>/dev/null)" = "!git-switcheroo sr" ]; then
-    git config --global --unset alias.sr
-  fi
+  remove_alias sr sr
+  remove_alias land land
+  remove_alias la land
   remove_source_line "$bashrc"
   remove_source_line "$zshrc"
   say "✓ git-switcheroo uninstalled — open a new shell"
@@ -149,14 +173,16 @@ install() {
     install_file shell/git-switcheroo.fish "$fish_file" 644
     shell_integrations=$((shell_integrations + 1))
   fi
+  install_alias sr sr "git sr still works in interactive shells" || true
+  install_alias land land "git land still works in interactive shells" || true
+  install_la_alias
   printf 'commands="%s"\n' "$commands" >"$config_file"
-  install_sr_alias
   add_source_line "$bashrc"
   add_source_line "$zshrc"
 
   say ""
   say "✓ git-switcheroo installed"
-  say "  commands: sr${commands:+ $commands}"
+  say "  commands: sr land${commands:+ $commands}"
   if [ "$shell_integrations" -eq 0 ]; then
     say "⚠ no shell config found to load git-switcheroo — add this line to your shell's rc file:"
     say "    $source_line"
