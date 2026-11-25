@@ -263,3 +263,33 @@ assert_landed() {
   [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "feature" ]
   [ "$(cat "$CD_FILE")" = "$REPO" ]
 }
+
+@test "an unrelated stash entry is never popped when nothing gets stashed" {
+  git init -q "$TEST_ROOT/sub"
+  git -C "$TEST_ROOT/sub" commit -q --allow-empty -m "Sub"
+  git -C "$REPO" -c protocol.file.allow=always submodule add -q "$TEST_ROOT/sub" sub
+  git -C "$REPO" commit -qm "Add sub"
+  add_worktree feature
+  git -C "$WT" -c protocol.file.allow=always submodule update -q --init
+  touch "$WT/sub/untracked.txt"
+  echo "mine" >"$REPO/mine.txt"
+  git -C "$REPO" stash push -q -u -m userstash
+  land feature
+  [ "$(git stash list | wc -l)" -eq 1 ]
+  git stash list | grep -q userstash
+  [ ! -e "$REPO/mine.txt" ]
+  refute_output_contains "carried"
+}
+
+@test "a failed stash in the worktree gives the changes back" {
+  add_worktree feature
+  echo "agent edit" >"$WT/app/models/user.rb"
+  touch "$REPO/.git/worktrees/wt-feature/HEAD.lock"
+  land feature
+  rm -f "$REPO/.git/worktrees/wt-feature/HEAD.lock"
+  [ "$status" -eq 1 ]
+  assert_output_contains "✗ could not stash the changes in $WT"
+  [ "$(cat "$WT/app/models/user.rb")" = "agent edit" ]
+  [ -z "$(git stash list)" ]
+  [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "feature" ]
+}

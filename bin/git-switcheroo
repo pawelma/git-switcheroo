@@ -112,11 +112,15 @@ land_hop() {
   hop "hopping to $1"
 }
 
+restore_stash_in_worktree() {
+  [ -n "$stash" ] || return 0
+  git -C "$wt_path" stash pop -q --index || fail "could not restore the changes in $wt_path — they are in stash $stash"
+}
+
 put_back_in_worktree() {
   [ -n "$wt_path" ] || return 0
   git -C "$wt_path" checkout -q "$branch" || { fail "could not put $branch back in $wt_path — git -C $wt_path checkout $branch"; return 1; }
-  [ -z "$stash" ] && return 0
-  git -C "$wt_path" stash pop -q --index || fail "could not restore the changes in $wt_path — they are in stash $stash"
+  restore_stash_in_worktree
 }
 
 land_branch() {
@@ -165,10 +169,22 @@ land_branch() {
       wt_path=''
     else
       if [ -n "$(git -C "$wt_path" status --porcelain)" ]; then
-        git -C "$wt_path" stash push -q -u -m "switcheroo land $branch" || { fail "could not stash the changes in $wt_path"; exit 1; }
-        stash=$(git rev-parse -q --verify refs/stash)
+        stash_before=$(git rev-parse -q --verify refs/stash)
+        git -C "$wt_path" stash push -q -u -m "switcheroo land $branch"
+        rc=$?
+        stash_after=$(git rev-parse -q --verify refs/stash)
+        [ "$stash_after" = "$stash_before" ] || stash=$stash_after
+        if [ "$rc" -ne 0 ]; then
+          restore_stash_in_worktree
+          fail "could not stash the changes in $wt_path"
+          exit 1
+        fi
       fi
-      git -C "$wt_path" checkout -q --detach || { fail "could not detach $branch in $wt_path"; exit 1; }
+      if ! git -C "$wt_path" checkout -q --detach; then
+        restore_stash_in_worktree
+        fail "could not detach $branch in $wt_path"
+        exit 1
+      fi
     fi
   fi
 
