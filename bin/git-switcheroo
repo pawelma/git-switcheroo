@@ -163,6 +163,11 @@ land_branch() {
       fail "$branch held by locked worktree $wt_path${wt_reason:+ ($wt_reason)} — git worktree unlock $wt_path first"
       exit 1
     fi
+    if [ -z "${SWITCHEROO_CD_FILE:-}" ] && [ -d "$wt_path" ] &&
+      same_dir "$(git rev-parse --show-toplevel)" "$wt_path"; then
+      fail "no shell wrapper to move you out of $wt_path — cd $main && git land $branch"
+      exit 2
+    fi
     if [ ! -d "$wt_path" ]; then
       warn "worktree $wt_path for $branch is gone — removing stale entry"
       git worktree remove "$wt_path" || { fail "could not remove stale worktree $wt_path"; exit 1; }

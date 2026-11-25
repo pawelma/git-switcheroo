@@ -56,6 +56,7 @@ curl -fsSL https://raw.githubusercontent.com/pawelma/git-switcheroo/main/install
 | The main checkout is already on it | ✓ already on feature-x (and you hop there) |
 | It's in no worktree | checked out in the main checkout, and you hop there |
 | Its worktree is locked | ✗ … git worktree unlock … first — nothing touched |
+| No shell wrapper (a script, an agent, a shell opened before installing) and you're inside that worktree | ✗ no shell wrapper to move you out of … — cd … && git land feature-x — nothing touched, so your shell never ends up in a deleted folder |
 | The checkout or carrying the changes fails | everything goes back to the worktree, or you're told which stash holds the changes; the worktree is only removed once the branch and its changes are safely in the main checkout |
 
 ## Scenarios

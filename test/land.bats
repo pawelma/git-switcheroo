@@ -204,6 +204,26 @@ assert_landed() {
   assert_output_contains "⚠ no shell wrapper to hop — cd $REPO"
 }
 
+@test "without the wrapper it refuses to remove the worktree you are in" {
+  add_worktree feature
+  echo "agent edit" >"$WT/app/models/user.rb"
+  cd "$WT/app"
+  run git-switcheroo land
+  [ "$status" -eq 2 ]
+  assert_output_contains "✗ no shell wrapper to move you out of $WT — cd $REPO && git land feature"
+  [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "feature" ]
+  [ "$(cat "$WT/app/models/user.rb")" = "agent edit" ]
+  [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "without the wrapper it lands from the main checkout of a worktree-held branch" {
+  add_worktree feature
+  cd "$REPO/app"
+  run git-switcheroo land feature
+  [ "$status" -eq 0 ]
+  assert_landed
+}
+
 @test "an alias for land dispatches to land" {
   git config --global alias.la '!git-switcheroo land'
   add_worktree feature
