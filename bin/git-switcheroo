@@ -112,6 +112,13 @@ land_hop() {
   hop "hopping to $1"
 }
 
+put_back_in_worktree() {
+  [ -n "$wt_path" ] || return 0
+  git -C "$wt_path" checkout -q "$branch" || { fail "could not put $branch back in $wt_path — git -C $wt_path checkout $branch"; return 1; }
+  [ -z "$stash" ] && return 0
+  git -C "$wt_path" stash pop -q --index || fail "could not restore the changes in $wt_path — they are in stash $stash"
+}
+
 land_branch() {
   [ $# -le 1 ] || { say "usage: git land [branch]"; exit 64; }
   git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { fail "not inside a git work tree"; exit 128; }
@@ -167,16 +174,27 @@ land_branch() {
 
   git -C "$main" switch -q "$branch"
   rc=$?
-  [ "$rc" -eq 0 ] || exit "$rc"
+  if [ "$rc" -ne 0 ]; then
+    put_back_in_worktree
+    fail "checkout failed in $main — $branch still in ${wt_path:-no worktree}"
+    exit "$rc"
+  fi
   after=$(git -C "$main" symbolic-ref --short -q HEAD)
   [ "$after" = "$branch" ] || { fail "expected $branch in $main, HEAD is ${after:-detached}"; exit 1; }
 
   if [ -n "$stash" ]; then
-    git -C "$main" stash pop -q --index || exit 1
+    if ! git -C "$main" stash pop -q --index; then
+      fail "could not apply the carried changes in $main — they are in stash $stash, worktree $wt_path kept"
+      exit 1
+    fi
     say "  carried uncommitted changes from $wt_path"
   fi
   if [ -n "$wt_path" ]; then
-    git -C "$main" worktree remove "$wt_path" && say "  removed worktree $wt_path"
+    if git -C "$main" worktree remove "$wt_path"; then
+      say "  removed worktree $wt_path"
+    else
+      warn "could not remove $wt_path — git worktree remove $wt_path"
+    fi
   fi
   ok "landed $branch in $main ($(git -C "$main" log -1 --format='%h %s'))"
   land_hop "$main"

@@ -221,3 +221,45 @@ assert_landed() {
   assert_landed
   [ "$(cat "$CD_FILE")" = "$REPO/app" ]
 }
+
+@test "a failed checkout puts everything back in the worktree" {
+  add_worktree feature
+  echo "agent edit" >"$WT/app/models/user.rb"
+  touch "$REPO/.git/index.lock"
+  land feature
+  rm -f "$REPO/.git/index.lock"
+  [ "$status" -ne 0 ]
+  assert_output_contains "✗ checkout failed in $REPO — feature still in $WT"
+  [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "feature" ]
+  [ "$(cat "$WT/app/models/user.rb")" = "agent edit" ]
+  [ -z "$(git stash list)" ]
+  [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
+}
+
+@test "a failed carry keeps the worktree and names the stash" {
+  commit_ignore local.cfg
+  add_worktree feature
+  echo "main copy" >"$REPO/local.cfg"
+  : >"$WT/.gitignore"
+  echo "agent copy" >"$WT/local.cfg"
+  land feature
+  [ "$status" -eq 1 ]
+  assert_output_contains "✗ could not apply the carried changes in $REPO — they are in stash"
+  assert_output_contains "worktree $WT kept"
+  [ -d "$WT" ]
+  [ "$(git stash list | wc -l)" -eq 1 ]
+}
+
+@test "a failed removal still lands and hops" {
+  commit_ignore locked/
+  add_worktree feature
+  mkdir "$WT/locked"
+  touch "$WT/locked/x"
+  chmod 555 "$WT/locked"
+  land feature
+  chmod 755 "$WT/locked"
+  [ "$status" -eq 0 ]
+  assert_output_contains "⚠ could not remove $WT — git worktree remove $WT"
+  [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "feature" ]
+  [ "$(cat "$CD_FILE")" = "$REPO" ]
+}
