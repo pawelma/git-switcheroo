@@ -52,7 +52,8 @@ curl -fsSL https://raw.githubusercontent.com/pawelma/git-switcheroo/main/install
 | Situation | Result |
 |---|---|
 | `feature-x` is checked out in a linked worktree | its uncommitted changes (staged, unstaged, untracked) move with it, it's checked out in the main checkout, the worktree is removed, and your shell `cd`s there (same subdirectory if it exists) |
-| The main checkout has uncommitted changes | ✗ … has uncommitted changes — clean it up first — nothing touched, so you decide what happens to them |
+| The main checkout has uncommitted changes to tracked files | ✗ … has uncommitted changes — clean it up first — nothing touched, so you decide what happens to them |
+| The main checkout has untracked files | left where they are — unless one has the same path as a file `feature-x` or the carried changes bring in: ✗ untracked files … clash with feature-x, listing just those, nothing touched |
 | The main checkout is already on it | ✓ already on feature-x (and you hop there) |
 | It's in no worktree | checked out in the main checkout, and you hop there |
 | Its worktree is locked | ✗ … git worktree unlock … first — nothing touched |

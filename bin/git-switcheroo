@@ -112,6 +112,28 @@ land_hop() {
   hop "hopping to $1"
 }
 
+branch_tree() {
+  git rev-parse -q --verify "refs/heads/$branch^{tree}" ||
+    git for-each-ref --count=1 --format='%(objectname)' "refs/remotes/*/$branch"
+}
+
+paths_landing() {
+  tree=$(branch_tree)
+  [ -z "$tree" ] || git -C "$main" ls-tree --full-tree -r --name-only "$tree"
+  [ -n "$wt_path" ] || return 0
+  git -C "$wt_path" ls-files --others --exclude-standard
+  git -C "$wt_path" diff --cached --name-only --diff-filter=A
+}
+
+clashing_untracked() {
+  untracked=$(git -C "$main" ls-files --others --exclude-standard)
+  [ -n "$untracked" ] || return 0
+  paths_landing | SWITCHEROO_UNTRACKED=$untracked awk '
+    BEGIN { n = split(ENVIRON["SWITCHEROO_UNTRACKED"], list, "\n"); for (i = 1; i <= n; i++) untracked[list[i]] = 1 }
+    ($0 in untracked) && !seen[$0]++
+  '
+}
+
 restore_stash_in_worktree() {
   [ -n "$stash" ] || return 0
   git -C "$wt_path" stash pop -q --index || fail "could not restore the changes in $wt_path — they are in stash $stash"
@@ -147,9 +169,9 @@ land_branch() {
     exit 0
   fi
 
-  if [ -n "$(git -C "$main" status --porcelain)" ]; then
+  if [ -n "$(git -C "$main" status --porcelain --untracked-files=no)" ]; then
     fail "$main has uncommitted changes — clean it up first, then git land $branch"
-    git -C "$main" status --short >&2
+    git -C "$main" status --short --untracked-files=no >&2
     exit 1
   fi
 
@@ -167,24 +189,33 @@ land_branch() {
       warn "worktree $wt_path for $branch is gone — removing stale entry"
       git worktree remove "$wt_path" || { fail "could not remove stale worktree $wt_path"; exit 1; }
       wt_path=''
-    else
-      if [ -n "$(git -C "$wt_path" status --porcelain)" ]; then
-        stash_before=$(git rev-parse -q --verify refs/stash)
-        git -C "$wt_path" stash push -q -u -m "switcheroo land $branch"
-        rc=$?
-        stash_after=$(git rev-parse -q --verify refs/stash)
-        [ "$stash_after" = "$stash_before" ] || stash=$stash_after
-        if [ "$rc" -ne 0 ]; then
-          restore_stash_in_worktree
-          fail "could not stash the changes in $wt_path"
-          exit 1
-        fi
-      fi
-      if ! git -C "$wt_path" checkout -q --detach; then
+    fi
+  fi
+
+  clashes=$(clashing_untracked)
+  if [ -n "$clashes" ]; then
+    fail "untracked files in $main clash with $branch — move them, then git land $branch"
+    printf '%s\n' "$clashes" | sed 's/^/  /' >&2
+    exit 1
+  fi
+
+  if [ -n "$wt_path" ]; then
+    if [ -n "$(git -C "$wt_path" status --porcelain)" ]; then
+      stash_before=$(git rev-parse -q --verify refs/stash)
+      git -C "$wt_path" stash push -q -u -m "switcheroo land $branch"
+      rc=$?
+      stash_after=$(git rev-parse -q --verify refs/stash)
+      [ "$stash_after" = "$stash_before" ] || stash=$stash_after
+      if [ "$rc" -ne 0 ]; then
         restore_stash_in_worktree
-        fail "could not detach $branch in $wt_path"
+        fail "could not stash the changes in $wt_path"
         exit 1
       fi
+    fi
+    if ! git -C "$wt_path" checkout -q --detach; then
+      restore_stash_in_worktree
+      fail "could not detach $branch in $wt_path"
+      exit 1
     fi
   fi
 
