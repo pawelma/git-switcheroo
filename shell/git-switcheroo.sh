@@ -8,7 +8,7 @@ if alias git >/dev/null 2>&1; then
   return 0
 fi
 
-_switcheroo_commands="sr $(sed -n 's/^commands=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/git-switcheroo/config" 2>/dev/null | tr -d '"')"
+_switcheroo_commands="sr land $(sed -n 's/^commands=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/git-switcheroo/config" 2>/dev/null | tr -d '"')"
 
 _switcheroo_handles() {
   case " $_switcheroo_commands " in

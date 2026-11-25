@@ -54,3 +54,10 @@ in_fish() {
   assert_output_contains "already used by worktree"
   assert_output_contains "PWD=$REPO"
 }
+
+@test "fish: git land hops back to the main checkout from the worktree" {
+  in_fish "cd '$WT/app'; git land; echo PWD=\$PWD"
+  [ "$status" -eq 0 ]
+  assert_output_contains "PWD=$REPO/app"
+  [ ! -d "$WT" ]
+}

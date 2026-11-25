@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/pawelma/git-switcheroo/main/install
 
 Open a new shell. That's it. Works in **fish**, **zsh** and **bash** (macOS & Linux).
 
-The installer asks which of your commands it may take over — it finds your existing aliases for `checkout`/`switch` (like `co`, `sw`) and pre-selects them. Plain `git checkout` / `git switch` are offered too, but are never taken over unless you pick them. `git sr` is always added.
+The installer asks which of your commands it may take over — it finds your existing aliases for `checkout`/`switch` (like `co`, `sw`) and pre-selects them. Plain `git checkout` / `git switch` are offered too, but are never taken over unless you pick them. `git sr` and `git land` are always added; the short `git la` is offered but not pre-selected (it's a common alias for `log --all`).
 
 Run the same line again to update. Remove with:
 
@@ -45,6 +45,19 @@ curl -fsSL https://raw.githubusercontent.com/pawelma/git-switcheroo/main/install
 | `git co -` | resolves your previous branch, then all of the above |
 | `git co -b new`, `git co -- file`, `git co v1.2.0` … | plain git, untouched |
 
+## What happens when you `git land`
+
+`git land` inside a worktree lands its branch; `git land feature-x` works from anywhere in the repo.
+
+| Situation | Result |
+|---|---|
+| `feature-x` is checked out in a linked worktree | its uncommitted changes (staged, unstaged, untracked) move with it, it's checked out in the main checkout, the worktree is removed, and your shell `cd`s there (same subdirectory if it exists) |
+| The main checkout has uncommitted changes | ✗ … has uncommitted changes — clean it up first — nothing touched, so you decide what happens to them |
+| The main checkout is already on it | ✓ already on feature-x (and you hop there) |
+| It's in no worktree | checked out in the main checkout, and you hop there |
+| Its worktree is locked | ✗ … git worktree unlock … first — nothing touched |
+| The checkout or carrying the changes fails | everything goes back to the worktree, or you're told which stash holds the changes; the worktree is only removed once the branch and its changes are safely in the main checkout |
+
 ## Scenarios
 
 **Reviewing what an agent built.** Agent A works in `../shop-agent-login` on `feature-login`. From your main checkout, `git co feature-login` drops you into `../shop-agent-login` — you're looking at the agent's actual files, not a stale copy.
@@ -52,6 +65,8 @@ curl -fsSL https://raw.githubusercontent.com/pawelma/git-switcheroo/main/install
 **Going back.** From inside an agent worktree, `git co main` hops you back to the main checkout.
 
 **Main stays home (pinning).** An agent checked out `main` in its worktree? `git co main` detaches it there (its files and uncommitted changes stay put; commits it makes afterwards land on a detached HEAD, not on `main`), checks out `main` in your main checkout and hops you there. From any linked worktree, `git co main` lands in the main checkout too. If that checkout fails (e.g. local changes in the way), the agent's worktree gets `main` back and you stay where you are. The default branch is `origin/HEAD`, falling back to `main`, then `master`; bare-repo setups have no main checkout and are left alone.
+
+**Testing what an agent built.** The agent finished `feature-x` in its worktree, but trying it out needs the slow setup (dependencies, `.env`, database) that only your main checkout has. `git land` from the worktree moves `feature-x` and its uncommitted work into the main checkout, removes the worktree and drops you there; point the agent at the main checkout to keep going. The worktree's gitignored files (its own `node_modules`, `.env`…) go with it — the main checkout keeps its own.
 
 **Deep in a subdirectory.** In `app/models`? You land in `app/models` of the other worktree.
 
@@ -74,6 +89,8 @@ Installed files:
 ~/.config/git-switcheroo/git-switcheroo.sh   (sourced from ~/.bashrc / ~/.zshrc)
 ~/.config/git-switcheroo/config              (commands you picked)
 git config --global alias.sr '!git-switcheroo sr'
+git config --global alias.land '!git-switcheroo land'
+git config --global alias.la '!git-switcheroo land'      (only if you picked la)
 ```
 
 `XDG_BIN_HOME`, `XDG_CONFIG_HOME` and `ZDOTDIR` are respected. On macOS, bash login shells read `~/.bash_profile` — make sure it sources `~/.bashrc`.
@@ -81,6 +98,8 @@ git config --global alias.sr '!git-switcheroo sr'
 ## FAQ
 
 **Will it break my existing `co` alias?** No. Your aliases are never modified; the shell function intercepts `git co` before git sees it. In shells without the function, your alias works as before.
+
+**Why is `la` opt-in?** Many people already use `git la` for `git log --all`. If you have an `la` alias, the installer leaves it alone.
 
 **Why `sr` and not `sw`?** `sr` (switcheroo) doesn't clash with common aliases. It behaves like `git switch` for anything that isn't a plain branch name.
 
