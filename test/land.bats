@@ -100,14 +100,55 @@ assert_landed() {
   [ "$(git -C "$REPO" symbolic-ref --short HEAD)" = "main" ]
 }
 
-@test "refuses when the main checkout has untracked files" {
+@test "untracked files in the main checkout stay put" {
   add_worktree feature
+  echo "agent note" >"$WT/notes.txt"
+  echo "scratch" >"$REPO/scratch.txt"
+  land feature
+  [ "$status" -eq 0 ]
+  assert_landed
+  [ "$(cat "$REPO/scratch.txt")" = "scratch" ]
+  [ "$(cat "$REPO/notes.txt")" = "agent note" ]
+}
+
+@test "refuses when an untracked file clashes with a file on the branch" {
+  add_worktree feature
+  echo "agent version" >"$WT/config.yml"
+  git -C "$WT" add config.yml
+  git -C "$WT" commit -qm "Add config"
+  echo "local version" >"$REPO/config.yml"
   touch "$REPO/scratch.txt"
   land feature
   [ "$status" -eq 1 ]
-  assert_output_contains "has uncommitted changes"
-  assert_output_contains "scratch.txt"
+  assert_output_contains "✗ untracked files in $REPO clash with feature — move them, then git land feature"
+  assert_output_contains "config.yml"
+  refute_output_contains "scratch.txt"
   [ "$(git -C "$WT" symbolic-ref --short HEAD)" = "feature" ]
+  [ "$(cat "$REPO/config.yml")" = "local version" ]
+}
+
+@test "refuses when an untracked file clashes with an untracked file being carried" {
+  add_worktree feature
+  echo "agent note" >"$WT/notes.txt"
+  echo "my note" >"$REPO/notes.txt"
+  land feature
+  [ "$status" -eq 1 ]
+  assert_output_contains "clash with feature"
+  assert_output_contains "notes.txt"
+  [ "$(cat "$WT/notes.txt")" = "agent note" ]
+  [ "$(cat "$REPO/notes.txt")" = "my note" ]
+  [ -z "$(git stash list)" ]
+}
+
+@test "refuses when an untracked file clashes with a staged new file being carried" {
+  add_worktree feature
+  echo "agent version" >"$WT/new.rb"
+  git -C "$WT" add new.rb
+  echo "local version" >"$REPO/new.rb"
+  land feature
+  [ "$status" -eq 1 ]
+  assert_output_contains "new.rb"
+  [ "$(git -C "$WT" diff --cached --name-only)" = "new.rb" ]
 }
 
 @test "the main checkout's other branch is left alone" {
