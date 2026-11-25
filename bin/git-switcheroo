@@ -69,16 +69,21 @@ same_dir() {
   [ "$(cd "$1" && pwd -P)" = "$(cd "$2" && pwd -P)" ]
 }
 
+destination_in() {
+  if [ -n "$prefix" ] && [ -d "$1/$prefix" ]; then
+    printf '%s\n' "$1/${prefix%/}"
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
 hand_to_shell() {
   if [ -z "${SWITCHEROO_CD_FILE:-}" ]; then
     fail "$branch is checked out at $1 — cd there"
     exit 2
   fi
-  prefix=${GIT_PREFIX:-$(git rev-parse --show-prefix)}
-  destination=$1
-  if [ -n "$prefix" ] && [ -d "$1/$prefix" ]; then
-    destination=$1/${prefix%/}
-  fi
+  : "${prefix=${GIT_PREFIX:-$(git rev-parse --show-prefix)}}"
+  destination=$(destination_in "$1")
   if ! printf '%s\n' "$destination" 2>/dev/null >"$SWITCHEROO_CD_FILE"; then
     fail "could not hand the worktree path to your shell — cd $1"
     exit 1
@@ -94,9 +99,96 @@ restore_detached() {
   fi
 }
 
+land_requested() {
+  [ "$1" = land ] || [ "$(git config --get "alias.$1" 2>/dev/null)" = '!git-switcheroo land' ]
+}
+
+land_hop() {
+  if [ -z "${SWITCHEROO_CD_FILE:-}" ]; then
+    warn "no shell wrapper to hop — cd $(destination_in "$1")"
+    return
+  fi
+  hand_to_shell "$1"
+  hop "hopping to $1"
+}
+
+land_branch() {
+  [ $# -le 1 ] || { say "usage: git land [branch]"; exit 64; }
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || { fail "not inside a git work tree"; exit 128; }
+  main=$(main_worktree)
+  [ -n "$main" ] || { fail "no main checkout to land in (bare repository)"; exit 1; }
+  prefix=${GIT_PREFIX:-$(git rev-parse --show-prefix)}
+  in_main=false
+  same_dir "$(git rev-parse --show-toplevel)" "$main" && in_main=true
+
+  if [ $# -eq 1 ]; then
+    branch=$1
+  elif [ "$in_main" = true ]; then
+    fail "nothing to land here — run git land <branch>"
+    exit 1
+  else
+    branch=$(git symbolic-ref --short -q HEAD) || { fail "HEAD is detached — run git land <branch>"; exit 1; }
+  fi
+
+  if [ "$(git -C "$main" symbolic-ref --short -q HEAD)" = "$branch" ]; then
+    ok "already on $branch"
+    [ "$in_main" = true ] || land_hop "$main"
+    exit 0
+  fi
+
+  if [ -n "$(git -C "$main" status --porcelain)" ]; then
+    fail "$main has uncommitted changes — clean it up first, then git land $branch"
+    git -C "$main" status --short >&2
+    exit 1
+  fi
+
+  wt_path='' stash=''
+  holder=$(worktree_holding "$branch")
+  if [ -n "$holder" ]; then
+    wt_path=$(printf '%s\n' "$holder" | sed -n 1p)
+    wt_lock=$(printf '%s\n' "$holder" | sed -n 2p)
+    wt_reason=$(printf '%s\n' "$holder" | sed -n 3p)
+    if [ "$wt_lock" = locked ]; then
+      fail "$branch held by locked worktree $wt_path${wt_reason:+ ($wt_reason)} — git worktree unlock $wt_path first"
+      exit 1
+    fi
+    if [ ! -d "$wt_path" ]; then
+      warn "worktree $wt_path for $branch is gone — removing stale entry"
+      git worktree remove "$wt_path" || { fail "could not remove stale worktree $wt_path"; exit 1; }
+      wt_path=''
+    else
+      if [ -n "$(git -C "$wt_path" status --porcelain)" ]; then
+        git -C "$wt_path" stash push -q -u -m "switcheroo land $branch" || { fail "could not stash the changes in $wt_path"; exit 1; }
+        stash=$(git rev-parse -q --verify refs/stash)
+      fi
+      git -C "$wt_path" checkout -q --detach || { fail "could not detach $branch in $wt_path"; exit 1; }
+    fi
+  fi
+
+  git -C "$main" switch -q "$branch"
+  rc=$?
+  [ "$rc" -eq 0 ] || exit "$rc"
+  after=$(git -C "$main" symbolic-ref --short -q HEAD)
+  [ "$after" = "$branch" ] || { fail "expected $branch in $main, HEAD is ${after:-detached}"; exit 1; }
+
+  if [ -n "$stash" ]; then
+    git -C "$main" stash pop -q --index || exit 1
+    say "  carried uncommitted changes from $wt_path"
+  fi
+  if [ -n "$wt_path" ]; then
+    git -C "$main" worktree remove "$wt_path" && say "  removed worktree $wt_path"
+  fi
+  ok "landed $branch in $main ($(git -C "$main" log -1 --format='%h %s'))"
+  land_hop "$main"
+}
+
 [ $# -ge 1 ] || { say "usage: git-switcheroo <command> [args...]"; exit 64; }
 cmd=$1
 shift
+if land_requested "$cmd"; then
+  land_branch "$@"
+  exit 0
+fi
 underlying=$(underlying_command "$cmd")
 [ -n "$underlying" ] || exec git "$cmd" "$@"
 
