@@ -1,7 +1,7 @@
 if status is-interactive
     set -l config_home $HOME/.config
     set -q XDG_CONFIG_HOME; and set config_home $XDG_CONFIG_HOME
-    set -g __switcheroo_commands sr
+    set -g __switcheroo_commands sr land
     if test -r $config_home/git-switcheroo/config
         set -a __switcheroo_commands (string match -r '^commands=.*' <$config_home/git-switcheroo/config | string replace 'commands=' '' | string trim -c '"' | string split -n ' ')
     end

@@ -79,3 +79,26 @@ in_zsh() {
   assert_output_contains "git-switcheroo: 'git' is an alias"
   refute_output_contains "parse error"
 }
+
+@test "bash: git land hops back to the main checkout from the worktree" {
+  in_bash "cd '$WT/app'; git land; echo \"PWD=\$PWD\""
+  [ "$status" -eq 0 ]
+  assert_output_contains "PWD=$REPO/app"
+  [ ! -d "$WT" ]
+}
+
+@test "zsh: git land hops back to the main checkout" {
+  in_zsh "cd '$WT'; git land; echo \"PWD=\$PWD\""
+  [ "$status" -eq 0 ]
+  assert_output_contains "PWD=$REPO"
+  [ ! -d "$WT" ]
+}
+
+@test "bash: git la lands when selected" {
+  echo 'commands="co la"' >"$XDG_CONFIG_HOME/git-switcheroo/config"
+  git config --global alias.la '!git-switcheroo land'
+  in_bash "cd '$WT'; git la; echo \"PWD=\$PWD\""
+  [ "$status" -eq 0 ]
+  assert_output_contains "PWD=$REPO"
+  [ ! -d "$WT" ]
+}
